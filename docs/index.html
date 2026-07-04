@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sharp Movement Detector — TxLINE</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #0b0d12; color: #e6e8ee; margin: 0; padding: 24px; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: #8b93a7; font-size: 13px; margin-bottom: 20px; }
+    .sub a { color: #7aa2f7; }
+    .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .card { background: #151823; border-radius: 8px; padding: 14px 18px; flex: 1; min-width: 140px; }
+    .card .num { font-size: 24px; font-weight: 600; }
+    .card .label { font-size: 12px; color: #8b93a7; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #232838; }
+    th { color: #8b93a7; font-weight: 500; }
+    .shortening { color: #4ade80; }
+    .drifting { color: #f87171; }
+    .pending { color: #8b93a7; }
+    .correct { color: #4ade80; }
+    .wrong { color: #f87171; }
+    #status { font-size: 12px; margin-bottom: 12px; color: #8b93a7; }
+    #status.err { color: #f87171; }
+    #apiInput { background: #151823; border: 1px solid #232838; color: #e6e8ee; padding: 6px 10px; border-radius: 6px; font-size: 12px; width: 320px; }
+    button { background: #232838; color: #e6e8ee; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    button:hover { background: #2c3348; }
+    .empty { color: #8b93a7; padding: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Sharp Movement Detector</h1>
+    <div class="sub">Live TxLINE odds monitor — built for the TxODDS World Cup hackathon. <a href="https://github.com/" target="_blank" rel="noopener">View source</a></div>
+
+    <div style="margin-bottom:16px; display:flex; gap:8px; align-items:center;">
+      <input id="apiInput" type="text" placeholder="API base URL, e.g. https://your-app.onrender.com" />
+      <button onclick="saveApiBase()">Connect</button>
+    </div>
+    <div id="status">Not connected.</div>
+
+    <div class="stats" id="stats"></div>
+    <table>
+      <thead>
+        <tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Direction</th><th>Detected</th><th>Result</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'smd_api_base';
+    let apiBase = localStorage.getItem(STORAGE_KEY) || '';
+
+    function saveApiBase() {
+      const val = document.getElementById('apiInput').value.trim().replace(/\/$/, '');
+      if (!val) return;
+      apiBase = val;
+      localStorage.setItem(STORAGE_KEY, apiBase);
+      refresh();
+    }
+
+    document.getElementById('apiInput').value = apiBase;
+
+    function setStatus(msg, isErr) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = isErr ? 'err' : '';
+    }
+
+    async function refresh() {
+      if (!apiBase) {
+        setStatus('Enter your deployed API base URL above and click Connect.');
+        return;
+      }
+      try {
+        const [signals, stats] = await Promise.all([
+          fetch(apiBase + '/api/signals').then(r => r.json()),
+          fetch(apiBase + '/api/stats').then(r => r.json()),
+        ]);
+        setStatus('Connected to ' + apiBase);
+
+        document.getElementById('stats').innerHTML = `
+          <div class="card"><div class="num">${signals.length}</div><div class="label">Signals logged</div></div>
+          <div class="card"><div class="num">${stats.total_resolved ?? 0}</div><div class="label">Resolved</div></div>
+          <div class="card"><div class="num">${stats.accuracy_pct ?? '—'}%</div><div class="label">Prediction accuracy</div></div>
+        `;
+
+        document.getElementById('rows').innerHTML = signals.length
+          ? signals.map(s => `
+              <tr>
+                <td>${s.fixture_name ?? s.fixture_id}</td>
+                <td>${s.market}</td>
+                <td>${s.selection}</td>
+                <td>${s.prev_price.toFixed(2)} → ${s.new_price.toFixed(2)}</td>
+                <td class="${s.direction}">${s.direction}</td>
+                <td>${new Date(s.detected_at).toLocaleTimeString()}</td>
+                <td class="${s.resolved ? (s.predicted_correctly ? 'correct' : 'wrong') : 'pending'}">
+                  ${s.resolved ? (s.predicted_correctly ? '✓ correct (' + s.outcome + ')' : '✗ wrong (' + s.outcome + ')') : 'pending'}
+                </td>
+              </tr>
+            `).join('')
+          : '<tr><td colspan="7" class="empty">No signals yet.</td></tr>';
+      } catch (err) {
+        setStatus('Could not reach API at ' + apiBase + ' — check the URL and that CORS is enabled.', true);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>
