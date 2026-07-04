@@ -1,0 +1,28 @@
+{
+  "name": "sharp-movement-detector",
+  "version": "1.0.0",
+  "description": "Autonomous agent that watches TxLINE odds streams, flags sharp/statistically significant line moves, and tracks whether each flagged signal predicted the eventual match outcome.",
+  "type": "module",
+  "main": "src/agent.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "activate": "node src/activate.js",
+    "start": "node src/agent.js",
+    "score": "node src/scoreSignals.js",
+    "dashboard": "node src/dashboard.js",
+    "server": "node server/api.js",
+    "combined": "node server/combined.js"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.3",
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "tweetnacl": "^1.0.3"
+  }
+}

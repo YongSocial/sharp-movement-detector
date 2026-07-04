@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: sharp-movement-detector
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server/combined.js
+    disk:
+      name: smd-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: NETWORK
+        value: devnet
+      - key: SERVICE_LEVEL_ID
+        value: 1
+      - key: MOVE_THRESHOLD
+        value: 0.15
+      - key: MOVE_THRESHOLD_PCT
+        value: 0.05
