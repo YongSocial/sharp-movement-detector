@@ -1,121 +1,89 @@
-import { DatabaseSync } from "node:sqlite";
+import { createClient } from "@supabase/supabase-js";
 
-const db = new DatabaseSync(new URL("../data/signals.db", import.meta.url).pathname);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS signals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fixture_id INTEGER NOT NULL,
-    market TEXT NOT NULL,
-    selection TEXT NOT NULL,
-    prev_price REAL NOT NULL,
-    new_price REAL NOT NULL,
-    delta REAL NOT NULL,
-    delta_pct REAL NOT NULL,
-    direction TEXT NOT NULL,
-    detected_at TEXT NOT NULL,
-    bookmaker TEXT,
-    resolved INTEGER NOT NULL DEFAULT 0,
-    outcome TEXT,
-    predicted_correctly INTEGER
-  );
+export const insertPricePoint = {
+  run: (p) => supabase.from("price_history").insert({
+    fixture_id: p.fixture_id, market: p.market, selection: p.selection,
+    price: p.price, ts: p.ts, bookmaker: p.bookmaker,
+  }),
+};
 
-  CREATE TABLE IF NOT EXISTS price_history (
-    fixture_id INTEGER NOT NULL,
-    market TEXT NOT NULL,
-    selection TEXT NOT NULL,
-    price REAL NOT NULL,
-    ts TEXT NOT NULL,
-    bookmaker TEXT
-  );
+export const insertSignal = {
+  run: (p) => supabase.from("signals").insert({
+    fixture_id: p.fixture_id, market: p.market, selection: p.selection,
+    prev_price: p.prev_price, new_price: p.new_price, delta: p.delta,
+    delta_pct: p.delta_pct, direction: p.direction, detected_at: p.detected_at,
+    bookmaker: p.bookmaker,
+  }),
+};
 
-  CREATE TABLE IF NOT EXISTS fixtures (
-    fixture_id INTEGER PRIMARY KEY,
-    name TEXT,
-    competition TEXT
-  );
+export const getUnresolvedSignalsForFixture = {
+  all: async () => {
+    const { data } = await supabase.from("signals").select("fixture_id").eq("resolved", false);
+    const unique = [...new Set((data ?? []).map((r) => r.fixture_id))];
+    return unique.map((fixture_id) => ({ fixture_id }));
+  },
+};
 
-  CREATE INDEX IF NOT EXISTS idx_price_history_key
-    ON price_history (fixture_id, market, selection, ts);
+export const resolveSignalsForFixture = {
+  run: async ({ fixture_id, outcome }) => {
+    const { data: rows } = await supabase
+      .from("signals")
+      .select("*")
+      .eq("fixture_id", fixture_id)
+      .eq("resolved", false);
 
-  CREATE INDEX IF NOT EXISTS idx_signals_fixture ON signals (fixture_id);
-  CREATE INDEX IF NOT EXISTS idx_signals_resolved ON signals (resolved);
-`);
+    for (const row of rows ?? []) {
+      const predicted_correctly =
+        (row.selection === outcome && row.direction === "shortening") ||
+        (row.selection !== outcome && row.direction === "drifting");
 
-function prepareNamed(sql) {
-  const rewrittenSql = sql.replace(/@(\w+)/g, "$$$1");
-  const stmt = db.prepare(rewrittenSql);
-  const toDollarParams = (params = {}) => {
-    const out = {};
-    for (const [k, v] of Object.entries(params)) out[`$${k}`] = v === undefined ? null : v;
-    return out;
-  };
-  return {
-    run: (params) => stmt.run(toDollarParams(params)),
-    get: (params) => stmt.get(toDollarParams(params)),
-    all: (params) => stmt.all(toDollarParams(params)),
-  };
-}
+      await supabase
+        .from("signals")
+        .update({ resolved: true, outcome, predicted_correctly })
+        .eq("id", row.id);
+    }
+  },
+};
 
-export const insertPricePoint = prepareNamed(`
-  INSERT INTO price_history (fixture_id, market, selection, price, ts, bookmaker)
-  VALUES (@fixture_id, @market, @selection, @price, @ts, @bookmaker)
-`);
+export const recentSignals = {
+  all: async ({ limit } = {}) => {
+    const { data } = await supabase
+      .from("signals")
+      .select("*")
+      .order("detected_at", { ascending: false })
+      .limit(limit ?? 100);
+    return data ?? [];
+  },
+};
 
-export const getBaselinePrice = prepareNamed(`
-  SELECT price, ts FROM price_history
-  WHERE fixture_id = @fixture_id AND market = @market AND selection = @selection
-    AND ts <= @cutoff
-  ORDER BY ts DESC
-  LIMIT 1
-`);
+export const accuracyStats = {
+  get: async () => {
+    const { data } = await supabase.from("signals").select("predicted_correctly").eq("resolved", true);
+    const rows = data ?? [];
+    const total_resolved = rows.length;
+    const correct = rows.filter((r) => r.predicted_correctly).length;
+    const accuracy_pct = total_resolved ? Math.round((correct / total_resolved) * 1000) / 10 : null;
+    return { total_resolved, correct, accuracy_pct };
+  },
+};
 
-export const insertSignal = prepareNamed(`
-  INSERT INTO signals (
-    fixture_id, market, selection, prev_price, new_price, delta, delta_pct,
-    direction, detected_at, bookmaker
-  ) VALUES (
-    @fixture_id, @market, @selection, @prev_price, @new_price, @delta, @delta_pct,
-    @direction, @detected_at, @bookmaker
-  )
-`);
+export const upsertFixtureName = {
+  run: (p) => supabase.from("fixtures").upsert({
+    fixture_id: p.fixture_id, name: p.name, competition: p.competition,
+  }),
+};
 
-export const getUnresolvedSignalsForFixture = prepareNamed(`
-  SELECT DISTINCT fixture_id FROM signals WHERE resolved = 0
-`);
+export const getFixtureName = {
+  get: async ({ fixture_id }) => {
+    const { data } = await supabase
+      .from("fixtures")
+      .select("name, competition")
+      .eq("fixture_id", fixture_id)
+      .maybeSingle();
+    return data ?? null;
+  },
+};
 
-export const resolveSignalsForFixture = prepareNamed(`
-  UPDATE signals
-  SET resolved = 1,
-      outcome = @outcome,
-      predicted_correctly = CASE
-        WHEN selection = @outcome AND direction = 'shortening' THEN 1
-        WHEN selection != @outcome AND direction = 'drifting' THEN 1
-        ELSE 0
-      END
-  WHERE fixture_id = @fixture_id AND resolved = 0
-`);
-
-export const recentSignals = prepareNamed(`
-  SELECT * FROM signals ORDER BY detected_at DESC LIMIT @limit
-`);
-
-export const accuracyStats = prepareNamed(`
-  SELECT
-    COUNT(*) AS total_resolved,
-    SUM(predicted_correctly) AS correct,
-    ROUND(100.0 * SUM(predicted_correctly) / NULLIF(COUNT(*), 0), 1) AS accuracy_pct
-  FROM signals WHERE resolved = 1
-`);
-
-export const upsertFixtureName = prepareNamed(`
-  INSERT INTO fixtures (fixture_id, name, competition)
-  VALUES (@fixture_id, @name, @competition)
-  ON CONFLICT(fixture_id) DO UPDATE SET name=excluded.name, competition=excluded.competition
-`);
-
-export const getFixtureName = prepareNamed(`
-  SELECT name, competition FROM fixtures WHERE fixture_id = @fixture_id
-`);
-
-export default db;
+export default supabase;
