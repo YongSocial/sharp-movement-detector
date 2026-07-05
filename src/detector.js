@@ -9,7 +9,7 @@ function key(o) {
 
 const MIN_UPDATE_GAP_MS = 5000;
 
-export function processOddsUpdate(update) {
+export async function processOddsUpdate(update) {
   const k = key(update);
   const prev = lastPrice.get(k);
 
@@ -17,7 +17,7 @@ export function processOddsUpdate(update) {
     return null;
   }
 
-  insertPricePoint.run({
+  await insertPricePoint.run({
     fixture_id: update.fixture_id,
     market: update.market,
     selection: update.selection,
@@ -53,7 +53,7 @@ export function processOddsUpdate(update) {
     bookmaker: update.bookmaker ?? null,
   };
 
-  insertSignal.run(signal);
+  await insertSignal.run(signal);
   return signal;
 }
 
