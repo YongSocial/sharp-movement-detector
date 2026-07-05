@@ -22,7 +22,7 @@ async function loadFixturesSnapshot(creds) {
     const away = fixture.Participant1IsHome ? fixture.Participant2 : fixture.Participant1;
     const name = home && away ? `${home} vs ${away}` : null;
     if (name) {
-      upsertFixtureName.run({
+      await upsertFixtureName.run({
         fixture_id: fixture.FixtureId,
         name,
         competition: fixture.Competition ?? null,
@@ -32,7 +32,7 @@ async function loadFixturesSnapshot(creds) {
 }
 
 export async function resolveFixtureName(fixtureId, creds) {
-  const cached = getFixtureName.get({ fixture_id: fixtureId });
+  const cached = await getFixtureName.get({ fixture_id: fixtureId });
   if (cached) return cached;
 
   if (!snapshotLoaded) {
@@ -49,5 +49,5 @@ export async function resolveFixtureName(fixtureId, creds) {
     await loadingPromise;
   }
 
-  return getFixtureName.get({ fixture_id: fixtureId }) ?? null;
+  return (await getFixtureName.get({ fixture_id: fixtureId })) ?? null;
 }
