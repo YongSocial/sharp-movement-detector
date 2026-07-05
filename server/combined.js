@@ -1,6 +1,3 @@
-// Runs the streaming agent and the HTTP API in a single process.
-// Uses Supabase (Postgres) for persistent storage, so data survives
-// Render free-tier restarts/sleeps.
 import cors from "cors";
 import express from "express";
 import { CONFIG } from "../src/config.js";
@@ -12,7 +9,6 @@ import { resolveFixtureName } from "../src/fixtureNames.js";
 import { recentSignals, accuracyStats, getFixtureName } from "../src/db.js";
 
 const seenFixtures = new Set();
-
 const RESOLVE_INTERVAL_MS = 60_000;
 
 function startApi() {
@@ -21,7 +17,7 @@ function startApi() {
 
   app.get("/api/signals", async (_req, res) => {
     try {
-      const rows = await recentSignals.all({ limit: 100 });
+      const rows = await recentSignals.all({ limit: 500 });
       const enriched = await Promise.all(
         rows.map(async (row) => {
           const fx = await getFixtureName.get({ fixture_id: row.fixture_id });
