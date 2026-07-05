@@ -1,3 +1,6 @@
+// Runs the streaming agent and the HTTP API in a single process.
+// Uses Supabase (Postgres) for persistent storage, so data survives
+// Render free-tier restarts/sleeps.
 import cors from "cors";
 import express from "express";
 import { CONFIG } from "../src/config.js";
