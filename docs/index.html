@@ -45,7 +45,7 @@
     <div class="stats" id="stats"></div>
     <table>
       <thead>
-        <tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Direction</th><th>Detected</th><th>Result</th></tr>
+        <tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Detected</th><th>Result</th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
@@ -95,15 +95,14 @@
                 <td>${s.fixture_name ?? s.fixture_id}</td>
                 <td>${s.market}</td>
                 <td>${s.selection === 'part1' ? 'Home' : s.selection === 'part2' ? 'Away' : s.selection}</td>
-                <td>${s.prev_price.toFixed(2)} → ${s.new_price.toFixed(2)}</td>
-                <td class="${s.direction}">${s.direction}</td>
+                <td class="${s.direction}">Odds ${s.direction === 'shortening' ? 'dropped' : 'rose'} by ${Math.abs(s.new_price - s.prev_price).toFixed(2)} (${s.prev_price.toFixed(2)} → ${s.new_price.toFixed(2)})</td>
                 <td>${new Date(s.detected_at).toLocaleTimeString()}</td>
                 <td class="${s.resolved ? (s.predicted_correctly ? 'correct' : 'wrong') : 'pending'}">
                   ${s.resolved ? (s.predicted_correctly ? '✓ correct (' + s.outcome + ')' : '✗ wrong (' + s.outcome + ')') : 'pending'}
                 </td>
               </tr>
             `).join('')
-          : '<tr><td colspan="7" class="empty">No signals yet.</td></tr>';
+          : '<tr><td colspan="6" class="empty">No signals yet.</td></tr>';
       } catch (err) {
         setStatus('Could not reach API at ' + apiBase + ' — check the URL and that CORS is enabled.', true);
       }
