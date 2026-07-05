@@ -86,4 +86,11 @@ export const getFixtureName = {
   },
 };
 
+export const allSignals = {
+  all: async () => {
+    const { data } = await supabase.from("signals").select("*").order("detected_at", { ascending: true });
+    return data ?? [];
+  },
+};
+
 export default supabase;
