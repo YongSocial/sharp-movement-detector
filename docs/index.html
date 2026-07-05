@@ -71,6 +71,15 @@
       el.className = isErr ? 'err' : '';
     }
 
+    function friendlyMarket(market) {
+      if (market.startsWith('1X2_PARTICIPANT_RESULT')) return 'Match Winner';
+      const ah = market.match(/^ASIANHANDICAP_PARTICIPANT_GOALS\(line=(.+)\)$/);
+      if (ah) return `Handicap (${ah[1]})`;
+      const ou = market.match(/^OVERUNDER_PARTICIPANT_GOALS\(line=(.+)\)$/);
+      if (ou) return `Total Goals O/U ${ou[1]}`;
+      return market;
+    }
+
     async function refresh() {
       if (!apiBase) {
         setStatus('Enter your deployed API base URL above and click Connect.');
@@ -93,7 +102,7 @@
           ? signals.map(s => `
               <tr>
                 <td>${s.fixture_name ?? s.fixture_id}</td>
-                <td>${s.market}</td>
+                <td>${friendlyMarket(s.market)}</td>
                 <td>${s.selection === 'part1' ? 'Home' : s.selection === 'part2' ? 'Away' : s.selection}</td>
                 <td class="${s.direction}">Odds ${s.direction === 'shortening' ? 'dropped' : 'rose'} by ${Math.abs(s.new_price - s.prev_price).toFixed(2)} (${s.prev_price.toFixed(2)} → ${s.new_price.toFixed(2)})</td>
                 <td>${new Date(s.detected_at).toLocaleTimeString()}</td>
