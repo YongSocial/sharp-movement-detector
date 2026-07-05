@@ -14,9 +14,6 @@ function httpClient(creds) {
   });
 }
 
-// Maps a TxLINE scores snapshot to a simple outcome label ("home" | "draw" | "away").
-// Adjust to the real scores schema (documentation/scores/soccer-feed) once validated
-// against live payloads.
 function deriveOutcome(scoreEntries) {
   if (!scoreEntries?.length) return null;
   const final = scoreEntries[scoreEntries.length - 1];
@@ -30,14 +27,9 @@ function deriveOutcome(scoreEntries) {
   return "draw";
 }
 
-/**
- * Polls scores for every fixture that still has unresolved signals and,
- * once a fixture is final, records whether each flagged signal correctly
- * anticipated the outcome.
- */
 export async function resolvePendingFixtures(creds) {
   const client = httpClient(creds);
-  const pending = getUnresolvedSignalsForFixture.all();
+  const pending = await getUnresolvedSignalsForFixture.all();
 
   let resolvedCount = 0;
 
@@ -47,7 +39,7 @@ export async function resolvePendingFixtures(creds) {
       const outcome = deriveOutcome(data);
       if (!outcome) continue;
 
-      resolveSignalsForFixture.run({ fixture_id, outcome });
+      await resolveSignalsForFixture.run({ fixture_id, outcome });
       resolvedCount += 1;
       console.log(`[resolver] fixture ${fixture_id} final -> ${outcome}`);
     } catch (err) {
