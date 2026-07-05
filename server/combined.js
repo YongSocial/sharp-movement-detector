@@ -16,15 +16,31 @@ function startApi() {
   const app = express();
   app.use(cors());
 
-  app.get("/api/signals", (_req, res) => {
-    const rows = recentSignals.all({ limit: 100 });
-    const enriched = rows.map((row) => {
-      const fx = getFixtureName.get({ fixture_id: row.fixture_id });
-      return { ...row, fixture_name: fx?.name ?? null, competition: fx?.competition ?? null };
-    });
-    res.json(enriched);
+  app.get("/api/signals", async (_req, res) => {
+    try {
+      const rows = await recentSignals.all({ limit: 100 });
+      const enriched = await Promise.all(
+        rows.map(async (row) => {
+          const fx = await getFixtureName.get({ fixture_id: row.fixture_id });
+          return { ...row, fixture_name: fx?.name ?? null, competition: fx?.competition ?? null };
+        })
+      );
+      res.json(enriched);
+    } catch (err) {
+      console.error("[api] /api/signals failed:", err.message);
+      res.status(500).json({ error: "internal error" });
+    }
   });
-  app.get("/api/stats", (_req, res) => res.json(accuracyStats.get()));
+
+  app.get("/api/stats", async (_req, res) => {
+    try {
+      res.json(await accuracyStats.get());
+    } catch (err) {
+      console.error("[api] /api/stats failed:", err.message);
+      res.status(500).json({ error: "internal error" });
+    }
+  });
+
   app.get("/health", (_req, res) => res.json({ ok: true, network: CONFIG.network }));
 
   const PORT = process.env.PORT || CONFIG.port;
@@ -51,19 +67,23 @@ async function startAgent() {
       if (status === "error") console.error("[agent] stream error, reconnecting:", err?.message);
       else console.log(`[agent] stream ${status}`);
     },
-    onMessage: (event, data) => {
+    onMessage: async (event, data) => {
       if (event !== "odds" && event !== "message") return;
       for (const update of normalizeOddsEvent(data)) {
         if (!seenFixtures.has(update.fixture_id)) {
           seenFixtures.add(update.fixture_id);
           resolveFixtureName(update.fixture_id, creds).catch(() => {});
         }
-        const signal = processOddsUpdate(update);
-        if (signal) {
-          console.log(
-            `[SHARP MOVE] fixture=${signal.fixture_id} ${signal.market}/${signal.selection} ` +
-              `${signal.prev_price.toFixed(2)} -> ${signal.new_price.toFixed(2)} (${signal.direction})`
-          );
+        try {
+          const signal = await processOddsUpdate(update);
+          if (signal) {
+            console.log(
+              `[SHARP MOVE] fixture=${signal.fixture_id} ${signal.market}/${signal.selection} ` +
+                `${signal.prev_price.toFixed(2)} -> ${signal.new_price.toFixed(2)} (${signal.direction})`
+            );
+          }
+        } catch (err) {
+          console.error("[agent] processOddsUpdate failed:", err.message);
         }
       }
     },
