@@ -46,6 +46,11 @@
   .newsitem .meta { color:#8b93a7; font-size:11px; margin-top:4px; }
   .about p { color:#c3c8d4; font-size:13px; line-height:1.7; max-width:640px; }
   .about h3 { font-size:14px; margin-top:24px; }
+  .winrow { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:12px; }
+  .winrow .label { width:60px; color:#8b93a7; }
+  .winrow .bar { flex:1; background:#1a1e27; border-radius:4px; height:18px; overflow:hidden; }
+  .winrow .fill { height:100%; background:#6ee7a8; }
+  .winrow .pct { width:50px; text-align:right; color:#c3c8d4; }
 </style>
 </head>
 <body>
@@ -72,22 +77,39 @@
     <div id="dashboard" class="section active">
       <div class="stats" id="stats"></div>
       <div class="filters">
-        <select id="filterResult">
-          <option value="">All results</option>
-          <option value="pending">Pending</option>
-          <option value="correct">Correct</option>
-          <option value="wrong">Wrong</option>
+        <select id="filterFixtureAgg">
+          <option value="">All fixtures</option>
         </select>
-        <input id="filterFixture" type="text" placeholder="Filter by fixture..." />
       </div>
       <table>
-        <thead><tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Detected</th><th>Result</th></tr></thead>
-        <tbody id="rows"></tbody>
+        <thead><tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Net Lean</th><th>Signals</th><th>Consistency</th><th>Result</th></tr></thead>
+        <tbody id="aggRows"></tbody>
       </table>
+
+      <div style="margin-top:24px;">
+        <div class="navitem" id="toggleRaw" style="display:inline-block;cursor:pointer;color:#8b93a7;font-size:12px;border:1px solid #1e232d;border-radius:6px;padding:6px 12px;">Show raw signal log ▾</div>
+      </div>
+      <div id="rawLogWrap" style="display:none;margin-top:14px;">
+        <div class="filters">
+          <select id="filterResult">
+            <option value="">All results</option>
+            <option value="pending">Pending</option>
+            <option value="correct">Correct</option>
+            <option value="wrong">Wrong</option>
+          </select>
+          <input id="filterFixture" type="text" placeholder="Filter by fixture..." />
+        </div>
+        <table>
+          <thead><tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Detected</th><th>Result</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="analytics" class="section">
       <div class="stats" id="analyticsStats"></div>
+      <h3 style="font-size:13px;color:#8b93a7;margin-top:24px;">Win rate by selection type</h3>
+      <div id="winRateBars"></div>
       <h3 style="font-size:13px;color:#8b93a7;margin-top:24px;">Signals by market</h3>
       <table>
         <thead><tr><th>Market</th><th>Signals</th><th>Resolved</th><th>Accuracy</th></tr></thead>
@@ -139,28 +161,94 @@ function friendlyMarket(market) {
 }
 
 let allSignals = [];
+let allAggregates = [];
 
 async function refreshDashboard() {
   try {
-    const [signals, stats] = await Promise.all([
+    const [signals, stats, aggregates, marketStats] = await Promise.all([
       fetch(API_BASE + '/api/signals').then(r => r.json()),
       fetch(API_BASE + '/api/stats').then(r => r.json()),
+      fetch(API_BASE + '/api/aggregates').then(r => r.json()),
+      fetch(API_BASE + '/api/market-stats').then(r => r.json()),
     ]);
     allSignals = signals;
+    allAggregates = aggregates;
     setStatus(true, 'Live — connected to TxLINE feed');
 
     document.getElementById('stats').innerHTML = `
-      <div class="card"><div class="num">${signals.length}</div><div class="label">Signals logged</div></div>
-      <div class="card"><div class="num">${stats.total_resolved ?? 0}</div><div class="label">Resolved</div></div>
+      <div class="card"><div class="num">${aggregates.length}</div><div class="label">Market reads</div></div>
+      <div class="card"><div class="num">${stats.total_resolved ?? 0}</div><div class="label">Resolved signals</div></div>
       <div class="card"><div class="num">${stats.accuracy_pct ?? '—'}%</div><div class="label">Prediction accuracy</div></div>
     `;
     document.getElementById('analyticsStats').innerHTML = document.getElementById('stats').innerHTML;
 
+    renderFixtureFilterOptions(aggregates);
+    renderAggRows();
     renderRows();
     renderMarketBreakdown(signals);
+    renderWinRates(marketStats);
   } catch (err) {
     setStatus(false, 'Disconnected — retrying…');
   }
+}
+
+function renderFixtureFilterOptions(aggregates) {
+  const select = document.getElementById('filterFixtureAgg');
+  const current = select.value;
+  const names = [...new Set(aggregates.map(a => a.fixture_name ?? String(a.fixture_id)))];
+  select.innerHTML = '<option value="">All fixtures</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
+  select.value = current;
+}
+
+function renderAggRows() {
+  const fixtureFilter = document.getElementById('filterFixtureAgg').value;
+  let filtered = allAggregates;
+  if (fixtureFilter) filtered = filtered.filter(a => (a.fixture_name ?? String(a.fixture_id)) === fixtureFilter);
+
+  filtered = [...filtered].sort((a, b) => new Date(b.last_detected) - new Date(a.last_detected));
+
+  document.getElementById('aggRows').innerHTML = filtered.length
+    ? filtered.map(a => {
+        const leanLabel = a.net_direction === 'shortening' ? 'Leaning toward' : 'Leaning away from';
+        const selLabel = a.selection === 'part1' ? 'Home' : a.selection === 'part2' ? 'Away' : a.selection;
+        const resultLabel = a.resolved
+          ? (a.predicted_correctly ? `✓ correct (${a.outcome})` : `✗ wrong (${a.outcome})`)
+          : 'pending';
+        const resultClass = a.resolved ? (a.predicted_correctly ? 'correct' : 'wrong') : 'pending';
+        return `
+          <tr>
+            <td>${a.fixture_name ?? a.fixture_id}</td>
+            <td>${friendlyMarket(a.market)}</td>
+            <td>${selLabel}</td>
+            <td class="${a.net_direction}">${leanLabel} (net ${Math.abs(a.net_delta).toFixed(2)})</td>
+            <td>${a.signal_count}</td>
+            <td>${a.consistency}%</td>
+            <td class="${resultClass}">${resultLabel}</td>
+          </tr>
+        `;
+      }).join('')
+    : '<tr><td colspan="7" class="empty">No market reads yet.</td></tr>';
+}
+
+document.getElementById('filterFixtureAgg').addEventListener('change', renderAggRows);
+
+document.getElementById('toggleRaw').addEventListener('click', () => {
+  const wrap = document.getElementById('rawLogWrap');
+  const isHidden = wrap.style.display === 'none';
+  wrap.style.display = isHidden ? 'block' : 'none';
+  document.getElementById('toggleRaw').textContent = isHidden ? 'Hide raw signal log ▴' : 'Show raw signal log ▾';
+});
+
+function renderWinRates(marketStats) {
+  document.getElementById('winRateBars').innerHTML = marketStats.length
+    ? marketStats.map(m => `
+        <div class="winrow">
+          <div class="label">${m.selection}</div>
+          <div class="bar"><div class="fill" style="width:${m.win_rate ?? 0}%"></div></div>
+          <div class="pct">${m.win_rate ?? '—'}%</div>
+        </div>
+      `).join('')
+    : '<p class="empty">No resolved signals yet.</p>';
 }
 
 function renderRows() {
