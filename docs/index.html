@@ -1,124 +1,242 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sharp Movement Detector — TxLINE</title>
-  <style>
-    :root { color-scheme: dark; }
-    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #0b0d12; color: #e6e8ee; margin: 0; padding: 24px; }
-    .wrap { max-width: 960px; margin: 0 auto; }
-    h1 { font-size: 22px; margin-bottom: 4px; }
-    .sub { color: #8b93a7; font-size: 13px; margin-bottom: 20px; }
-    .sub a { color: #7aa2f7; }
-    .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .card { background: #151823; border-radius: 8px; padding: 14px 18px; flex: 1; min-width: 140px; }
-    .card .num { font-size: 24px; font-weight: 600; }
-    .card .label { font-size: 12px; color: #8b93a7; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #232838; }
-    th { color: #8b93a7; font-weight: 500; }
-    .shortening { color: #f87171; }
-    .drifting { color: #4ade80; }
-    .pending { color: #8b93a7; }
-    .correct { color: #4ade80; }
-    .wrong { color: #f87171; }
-    #status { font-size: 12px; margin-bottom: 12px; color: #8b93a7; }
-    #status.err { color: #f87171; }
-    #apiInput { background: #151823; border: 1px solid #232838; color: #e6e8ee; padding: 6px 10px; border-radius: 6px; font-size: 12px; width: 320px; }
-    button { background: #232838; color: #e6e8ee; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-    button:hover { background: #2c3348; }
-    .empty { color: #8b93a7; padding: 20px 0; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sharp Movement Detector</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system,"Segoe UI",sans-serif; background:#0a0c10; color:#e6e8ee; margin:0; }
+  .app { display:flex; min-height:100vh; }
+  nav { width:220px; background:#0f1218; border-right:1px solid #1e232d; padding:20px 0; flex-shrink:0; }
+  .brand { padding:0 20px 20px; font-weight:700; font-size:15px; border-bottom:1px solid #1e232d; margin-bottom:12px; }
+  .brand span { color:#6ee7a8; }
+  .navitem { padding:10px 20px; font-size:13px; color:#8b93a7; cursor:pointer; border-left:3px solid transparent; }
+  .navitem:hover { color:#e6e8ee; background:#151823; }
+  .navitem.active { color:#e6e8ee; border-left-color:#6ee7a8; background:#151823; }
+  main { flex:1; padding:24px 32px; max-width:1100px; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .status { display:flex; align-items:center; gap:8px; font-size:12px; color:#8b93a7; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#4ade80; box-shadow:0 0 8px #4ade80; }
+  .dot.off { background:#6b7280; box-shadow:none; }
+  h1 { font-size:20px; margin:0 0 2px; }
+  .subtitle { color:#8b93a7; font-size:13px; margin:0 0 20px; }
+  .stats { display:flex; gap:14px; margin-bottom:20px; flex-wrap:wrap; }
+  .card { background:#12151c; border:1px solid #1e232d; border-radius:8px; padding:14px 18px; flex:1; min-width:140px; }
+  .card .num { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .card .label { font-size:11px; color:#8b93a7; text-transform:uppercase; letter-spacing:.04em; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid #1a1e27; }
+  th { color:#8b93a7; font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  tr:hover td { background:#12151c; }
+  .shortening { color:#f87171; }
+  .drifting { color:#4ade80; }
+  .pending { color:#8b93a7; }
+  .correct { color:#4ade80; }
+  .wrong { color:#f87171; }
+  .empty { color:#8b93a7; padding:20px 0; }
+  .section { display:none; }
+  .section.active { display:block; }
+  .filters { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .filters select, .filters input { background:#12151c; border:1px solid #1e232d; color:#e6e8ee; padding:6px 10px; border-radius:6px; font-size:12px; }
+  .newsitem { padding:12px 0; border-bottom:1px solid #1a1e27; }
+  .newsitem a { color:#e6e8ee; text-decoration:none; font-size:14px; font-weight:500; }
+  .newsitem a:hover { color:#6ee7a8; }
+  .newsitem .meta { color:#8b93a7; font-size:11px; margin-top:4px; }
+  .about p { color:#c3c8d4; font-size:13px; line-height:1.7; max-width:640px; }
+  .about h3 { font-size:14px; margin-top:24px; }
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Sharp Movement Detector</h1>
-    <div class="sub">Live TxLINE odds monitor — built for the TxODDS World Cup hackathon. <a href="https://github.com/" target="_blank" rel="noopener">View source</a></div>
-
-    <div style="margin-bottom:16px; display:flex; gap:8px; align-items:center;">
-      <input id="apiInput" type="text" placeholder="API base URL, e.g. https://your-app.onrender.com" />
-      <button onclick="saveApiBase()">Connect</button>
+<div class="app">
+  <nav>
+    <div class="brand">Sharp<span>Signal</span></div>
+    <div class="navitem active" data-tab="dashboard">Dashboard</div>
+    <div class="navitem" data-tab="analytics">Analytics</div>
+    <div class="navitem" data-tab="news">News</div>
+    <div class="navitem" data-tab="about">How it works</div>
+  </nav>
+  <main>
+    <div class="topbar">
+      <div>
+        <h1>Sharp Movement Detector</h1>
+        <p class="subtitle">Live TxLINE odds monitor — World Cup hackathon</p>
+      </div>
+      <div class="status">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
     </div>
-    <div id="status">Not connected.</div>
 
-    <div class="stats" id="stats"></div>
-    <table>
-      <thead>
-        <tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Detected</th><th>Result</th></tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </div>
+    <div id="dashboard" class="section active">
+      <div class="stats" id="stats"></div>
+      <div class="filters">
+        <select id="filterResult">
+          <option value="">All results</option>
+          <option value="pending">Pending</option>
+          <option value="correct">Correct</option>
+          <option value="wrong">Wrong</option>
+        </select>
+        <input id="filterFixture" type="text" placeholder="Filter by fixture..." />
+      </div>
+      <table>
+        <thead><tr><th>Fixture</th><th>Market</th><th>Selection</th><th>Move</th><th>Detected</th><th>Result</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
 
-  <script>
-    const STORAGE_KEY = 'smd_api_base';
-    let apiBase = localStorage.getItem(STORAGE_KEY) || '';
+    <div id="analytics" class="section">
+      <div class="stats" id="analyticsStats"></div>
+      <h3 style="font-size:13px;color:#8b93a7;margin-top:24px;">Signals by market</h3>
+      <table>
+        <thead><tr><th>Market</th><th>Signals</th><th>Resolved</th><th>Accuracy</th></tr></thead>
+        <tbody id="marketRows"></tbody>
+      </table>
+    </div>
 
-    function saveApiBase() {
-      const val = document.getElementById('apiInput').value.trim().replace(/\/$/, '');
-      if (!val) return;
-      apiBase = val;
-      localStorage.setItem(STORAGE_KEY, apiBase);
-      refresh();
+    <div id="news" class="section">
+      <div id="newsList"><p class="empty">Loading news…</p></div>
+    </div>
+
+    <div id="about" class="section about">
+      <h3>What this does</h3>
+      <p>This agent connects directly to TxLINE's live odds stream and watches every price update in real time. When a bookmaker's odds move sharply during a live match — more than a set threshold, in either direction — it's logged as a signal.</p>
+      <h3>Why it matters</h3>
+      <p>Sharp, sudden odds moves during play often reflect new information hitting the market faster than the average viewer can react: an injury, a tactical shift, momentum swinging. Tracking these moves systematically turns market behavior into a readable signal.</p>
+      <h3>Self-grading loop</h3>
+      <p>Every signal is checked against the final match result once it's available. If odds shortened toward the outcome that happened, or drifted away from the outcome that didn't, it's marked correct. This produces a running accuracy score — the system checks its own predictive value automatically, with no manual grading.</p>
+      <h3>Architecture</h3>
+      <p>Node.js agent streams odds via SSE, filters for in-play movement only (pre-match churn is excluded as noise), and persists every signal to a Postgres database (Supabase). A lightweight API serves this dashboard, which is fully static and hosted separately on GitHub Pages.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+const API_BASE = 'https://sharp-movement-detector.onrender.com';
+
+document.querySelectorAll('.navitem').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.navitem').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(item.dataset.tab).classList.add('active');
+  });
+});
+
+function setStatus(ok, msg) {
+  document.getElementById('statusDot').className = ok ? 'dot' : 'dot off';
+  document.getElementById('statusText').textContent = msg;
+}
+
+function friendlyMarket(market) {
+  if (market.startsWith('1X2_PARTICIPANT_RESULT')) return 'Match Winner';
+  const ah = market.match(/^ASIANHANDICAP_PARTICIPANT_GOALS\(line=(.+)\)$/);
+  if (ah) return `Handicap (${ah[1]})`;
+  const ou = market.match(/^OVERUNDER_PARTICIPANT_GOALS\(line=(.+)\)$/);
+  if (ou) return `Total Goals O/U ${ou[1]}`;
+  return market;
+}
+
+let allSignals = [];
+
+async function refreshDashboard() {
+  try {
+    const [signals, stats] = await Promise.all([
+      fetch(API_BASE + '/api/signals').then(r => r.json()),
+      fetch(API_BASE + '/api/stats').then(r => r.json()),
+    ]);
+    allSignals = signals;
+    setStatus(true, 'Live — connected to TxLINE feed');
+
+    document.getElementById('stats').innerHTML = `
+      <div class="card"><div class="num">${signals.length}</div><div class="label">Signals logged</div></div>
+      <div class="card"><div class="num">${stats.total_resolved ?? 0}</div><div class="label">Resolved</div></div>
+      <div class="card"><div class="num">${stats.accuracy_pct ?? '—'}%</div><div class="label">Prediction accuracy</div></div>
+    `;
+    document.getElementById('analyticsStats').innerHTML = document.getElementById('stats').innerHTML;
+
+    renderRows();
+    renderMarketBreakdown(signals);
+  } catch (err) {
+    setStatus(false, 'Disconnected — retrying…');
+  }
+}
+
+function renderRows() {
+  const resultFilter = document.getElementById('filterResult').value;
+  const fixtureFilter = document.getElementById('filterFixture').value.toLowerCase();
+
+  let filtered = allSignals;
+  if (resultFilter === 'pending') filtered = filtered.filter(s => !s.resolved);
+  if (resultFilter === 'correct') filtered = filtered.filter(s => s.resolved && s.predicted_correctly);
+  if (resultFilter === 'wrong') filtered = filtered.filter(s => s.resolved && !s.predicted_correctly);
+  if (fixtureFilter) filtered = filtered.filter(s => (s.fixture_name ?? String(s.fixture_id)).toLowerCase().includes(fixtureFilter));
+
+  document.getElementById('rows').innerHTML = filtered.length
+    ? filtered.map(s => `
+        <tr>
+          <td>${s.fixture_name ?? s.fixture_id}</td>
+          <td>${friendlyMarket(s.market)}</td>
+          <td>${s.selection === 'part1' ? 'Home' : s.selection === 'part2' ? 'Away' : s.selection}</td>
+          <td class="${s.direction}">Odds ${s.direction === 'shortening' ? 'dropped' : 'rose'} by ${Math.abs(s.new_price - s.prev_price).toFixed(2)} (${s.prev_price.toFixed(2)} → ${s.new_price.toFixed(2)})</td>
+          <td>${new Date(s.detected_at).toLocaleTimeString()}</td>
+          <td class="${s.resolved ? (s.predicted_correctly ? 'correct' : 'wrong') : 'pending'}">
+            ${s.resolved ? (s.predicted_correctly ? '✓ correct (' + s.outcome + ')' : '✗ wrong (' + s.outcome + ')') : 'pending'}
+          </td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="6" class="empty">No signals match this filter.</td></tr>';
+}
+
+function renderMarketBreakdown(signals) {
+  const byMarket = {};
+  for (const s of signals) {
+    const m = friendlyMarket(s.market);
+    byMarket[m] ??= { total: 0, resolved: 0, correct: 0 };
+    byMarket[m].total++;
+    if (s.resolved) {
+      byMarket[m].resolved++;
+      if (s.predicted_correctly) byMarket[m].correct++;
     }
+  }
+  document.getElementById('marketRows').innerHTML = Object.entries(byMarket).map(([market, d]) => `
+    <tr>
+      <td>${market}</td>
+      <td>${d.total}</td>
+      <td>${d.resolved}</td>
+      <td>${d.resolved ? Math.round((d.correct / d.resolved) * 100) + '%' : '—'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="empty">No data yet.</td></tr>';
+}
 
-    document.getElementById('apiInput').value = apiBase;
+document.getElementById('filterResult').addEventListener('change', renderRows);
+document.getElementById('filterFixture').addEventListener('input', renderRows);
 
-    function setStatus(msg, isErr) {
-      const el = document.getElementById('status');
-      el.textContent = msg;
-      el.className = isErr ? 'err' : '';
-    }
+async function loadNews() {
+  const feeds = [
+    'https://api.rss2json.com/v1/api.json?rss_url=https://www.espn.com/espn/rss/soccer/news',
+    'https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/sport/football/rss.xml',
+  ];
+  try {
+    const results = await Promise.all(feeds.map(u => fetch(u).then(r => r.json()).catch(() => null)));
+    const items = results.filter(Boolean).flatMap(r => r.items ?? []).slice(0, 15);
+    document.getElementById('newsList').innerHTML = items.length
+      ? items.map(item => `
+          <div class="newsitem">
+            <a href="${item.link}" target="_blank" rel="noopener">${item.title}</a>
+            <div class="meta">${new Date(item.pubDate).toLocaleDateString()}</div>
+          </div>
+        `).join('')
+      : '<p class="empty">No news available right now.</p>';
+  } catch {
+    document.getElementById('newsList').innerHTML = '<p class="empty">Could not load news feed.</p>';
+  }
+}
 
-    function friendlyMarket(market) {
-      if (market.startsWith('1X2_PARTICIPANT_RESULT')) return 'Match Winner';
-      const ah = market.match(/^ASIANHANDICAP_PARTICIPANT_GOALS\(line=(.+)\)$/);
-      if (ah) return `Handicap (${ah[1]})`;
-      const ou = market.match(/^OVERUNDER_PARTICIPANT_GOALS\(line=(.+)\)$/);
-      if (ou) return `Total Goals O/U ${ou[1]}`;
-      return market;
-    }
-
-    async function refresh() {
-      if (!apiBase) {
-        setStatus('Enter your deployed API base URL above and click Connect.');
-        return;
-      }
-      try {
-        const [signals, stats] = await Promise.all([
-          fetch(apiBase + '/api/signals').then(r => r.json()),
-          fetch(apiBase + '/api/stats').then(r => r.json()),
-        ]);
-        setStatus('Connected to ' + apiBase);
-
-        document.getElementById('stats').innerHTML = `
-          <div class="card"><div class="num">${signals.length}</div><div class="label">Signals logged</div></div>
-          <div class="card"><div class="num">${stats.total_resolved ?? 0}</div><div class="label">Resolved</div></div>
-          <div class="card"><div class="num">${stats.accuracy_pct ?? '—'}%</div><div class="label">Prediction accuracy</div></div>
-        `;
-
-        document.getElementById('rows').innerHTML = signals.length
-          ? signals.map(s => `
-              <tr>
-                <td>${s.fixture_name ?? s.fixture_id}</td>
-                <td>${friendlyMarket(s.market)}</td>
-                <td>${s.selection === 'part1' ? 'Home' : s.selection === 'part2' ? 'Away' : s.selection}</td>
-                <td class="${s.direction}">Odds ${s.direction === 'shortening' ? 'dropped' : 'rose'} by ${Math.abs(s.new_price - s.prev_price).toFixed(2)} (${s.prev_price.toFixed(2)} → ${s.new_price.toFixed(2)})</td>
-                <td>${new Date(s.detected_at).toLocaleTimeString()}</td>
-                <td class="${s.resolved ? (s.predicted_correctly ? 'correct' : 'wrong') : 'pending'}">
-                  ${s.resolved ? (s.predicted_correctly ? '✓ correct (' + s.outcome + ')' : '✗ wrong (' + s.outcome + ')') : 'pending'}
-                </td>
-              </tr>
-            `).join('')
-          : '<tr><td colspan="6" class="empty">No signals yet.</td></tr>';
-      } catch (err) {
-        setStatus('Could not reach API at ' + apiBase + ' — check the URL and that CORS is enabled.', true);
-      }
-    }
-
-    refresh();
-    setInterval(refresh, 5000);
-  </script>
+refreshDashboard();
+loadNews();
+setInterval(refreshDashboard, 5000);
+</script>
 </body>
 </html>
